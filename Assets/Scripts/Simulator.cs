@@ -30,7 +30,9 @@ public class Simulator : MonoBehaviour
     [SerializeField] float linewidth = 0.1f, sensitivity = 1f;
     [SerializeField] GameObject[] prefabs;
     [SerializeField] GameObject connector, componentMenu, escapeMenu, editor;
-    [SerializeField] float clockFrequency = 1f;
+    [SerializeField] float clockFrequency = 1f, guideLineWidth = 0.01f;
+    [SerializeField] LineRenderer guideLine;
+    [SerializeField] Color guideLineColor;
 
     void Start()
     {
@@ -49,6 +51,8 @@ public class Simulator : MonoBehaviour
         Application.targetFrameRate = 60;
         line.startWidth = line.endWidth = linewidth;
         line.startColor = line.endColor = Color.black;
+        guideLine.startWidth = guideLine.endWidth = guideLineWidth;
+        guideLine.startColor = guideLine.endColor = guideLineColor;
         camPositionText.text = "<"+mainCam.transform.position.x.ToString("0")+","+mainCam.transform.position.y.ToString("0")+">";
         componentMenu.SetActive(PlayerPrefs.GetInt("BarOpened",1) == 1);
         StartCoroutine(ClockToggle());
@@ -132,6 +136,7 @@ public class Simulator : MonoBehaviour
                     connecting = false;
                     line.positionCount = 0;
                     line.enabled = false;
+                    guideLine.enabled = false;
                     currConnectionPoints.Clear();
                 }
             }
@@ -217,7 +222,29 @@ public class Simulator : MonoBehaviour
         if(connecting)
         {
             point = mainCam.ScreenToWorldPoint(Input.mousePosition);
+            Vector2 lastPoint = currConnectionPoints[currConnectionPoints.Count-2];
             currConnectionPoints[currConnectionPoints.Count-1] = point;
+
+            // Check whether mouse has moved more in x direction or y direction
+            if(Input.GetKey(KeyCode.LeftControl))
+            {
+                guideLine.enabled = true;
+                Vector2 ctrlPoint;
+                if(Mathf.Abs(point.x - lastPoint.x) > Mathf.Abs(point.y-lastPoint.y))
+                {
+                    ctrlPoint = new Vector2(point.x, lastPoint.y);
+                    currConnectionPoints[currConnectionPoints.Count-1] = ctrlPoint;  
+                    guideLine.SetPositions(new Vector3[] {ctrlPoint + Vector2.down * 5f, ctrlPoint + Vector2.up * 5f});
+                }
+                else
+                {
+                    ctrlPoint = new Vector2(lastPoint.x, point.y);
+                    currConnectionPoints[currConnectionPoints.Count-1] = ctrlPoint;  
+                    guideLine.SetPositions(new Vector3[] {ctrlPoint + Vector2.left * 5f, ctrlPoint + Vector2.right * 5f}); 
+                }
+            }
+            else guideLine.enabled = false;
+
             line.positionCount = currConnectionPoints.Count;
             line.SetPositions(currConnectionPoints.ToArray());
         }
