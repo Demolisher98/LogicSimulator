@@ -1356,9 +1356,13 @@ MonoBehaviour:
   escapeMenu: {fileID: 912028090}
   editor: {fileID: 754209770}
   clockFrequency: 1
-  guideLineWidth: 0.01
+  guideLineWidth: 0.05
   guideLine: {fileID: 1052691606}
   guideLineColor: {r: 0.28490567, g: 0.9341665, b: 1, a: 1}
+  guideLineHitColor: {r: 1, g: 0.38039216, b: 0, a: 1}
+  inputNodeLayer:
+    serializedVersion: 2
+    m_Bits: 8
 --- !u!120 &1167697652
 LineRenderer:
   serializedVersion: 2

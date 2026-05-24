@@ -20,6 +20,7 @@ public class Simulator : MonoBehaviour
     List<Transform> circuitObjects;
     List<ushort> ids;
     int conOutPutIndex;
+    Vector2 screenTopLeft, screenBottomRight;
     public static List<ConnectionLine> connectionLines;
     public static Simulator simulator;
     [HideInInspector]public bool clockPulse = false;
@@ -32,7 +33,8 @@ public class Simulator : MonoBehaviour
     [SerializeField] GameObject connector, componentMenu, escapeMenu, editor;
     [SerializeField] float clockFrequency = 1f, guideLineWidth = 0.01f;
     [SerializeField] LineRenderer guideLine;
-    [SerializeField] Color guideLineColor;
+    [SerializeField] Color guideLineColor, guideLineHitColor;
+    [SerializeField] LayerMask inputNodeLayer;
 
     void Start()
     {
@@ -56,12 +58,17 @@ public class Simulator : MonoBehaviour
         camPositionText.text = "<"+mainCam.transform.position.x.ToString("0")+","+mainCam.transform.position.y.ToString("0")+">";
         componentMenu.SetActive(PlayerPrefs.GetInt("BarOpened",1) == 1);
         StartCoroutine(ClockToggle());
+        CheckScreenBounds();
     }
 
     void Update()
     {
-        mainCam.orthographicSize -= Input.GetAxis("Mouse ScrollWheel");
-        mainCam.orthographicSize = Mathf.Clamp(mainCam.orthographicSize, 3f, 20f);
+        if(Input.GetAxis("Mouse ScrollWheel") != 0f)
+        {
+            mainCam.orthographicSize -= Input.GetAxis("Mouse ScrollWheel");
+            mainCam.orthographicSize = Mathf.Clamp(mainCam.orthographicSize, 3f, 20f);
+            CheckScreenBounds();
+        }
         // Left Click
         if (Input.GetMouseButtonDown(0))
         {
@@ -110,12 +117,13 @@ public class Simulator : MonoBehaviour
             if(connecting)
             {
                 currConnectionPoints.Add(point);
-                
                 line.positionCount = currConnectionPoints.Count;
                 line.SetPositions(currConnectionPoints.ToArray());
 
                 if (col != null && col.transform.parent != null && col.gameObject.CompareTag("InputNode"))
                 {
+                    point = col.transform.position;
+                    currConnectionPoints[currConnectionPoints.Count - 1] = point;
                     if(col.gameObject.name.EndsWith('.'))
                     {
                         print("Connected to smt else");
@@ -131,6 +139,7 @@ public class Simulator : MonoBehaviour
                         connectionLine.SetUp(outputComponent, conOutPutIndex, inputComponent, int.Parse(col.gameObject.name.Split('.')[0]));
                         connectionLine.SetTransforms(connectComponent, col.transform);
                         connectionLine.SetConnectionPoints(currConnectionPoints);
+                        print("Setting");
                         connectionLines.Add(connectionLine);
                     }
                     connecting = false;
@@ -196,6 +205,7 @@ public class Simulator : MonoBehaviour
         {
             mainCam.transform.position -= new Vector3(Input.GetAxis("Mouse X"), Input.GetAxis("Mouse Y")) * sensitivity;
             camPositionText.text = "<"+mainCam.transform.position.x.ToString("0")+","+mainCam.transform.position.y.ToString("0")+">";
+            CheckScreenBounds();
         }
 
         //EnableMenu
@@ -206,17 +216,23 @@ public class Simulator : MonoBehaviour
             PlayerPrefs.SetInt("BarOpened",toolsOpened ? 1 : 0);
         }
 
-        //Press Delete
+        //Delete Selected Object
         if (Input.GetKeyDown(KeyCode.Delete))
         {
             Destroy(selectedObject);
             selectGraphic.gameObject.SetActive(false);
         }
 
-        //Press Esc
+        //Pause Menu
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             escapeMenu.SetActive(true);
+        }
+
+        // Rotate an object
+        if(Input.GetKeyDown(KeyCode.R))
+        {
+            selectedObject.transform.Rotate(new Vector3(0f,0f,90f));
         }
 
         if(connecting)
@@ -229,19 +245,24 @@ public class Simulator : MonoBehaviour
             if(Input.GetKey(KeyCode.LeftControl))
             {
                 guideLine.enabled = true;
-                Vector2 ctrlPoint;
+                Vector2 ctrlPoint, start, end;
                 if(Mathf.Abs(point.x - lastPoint.x) > Mathf.Abs(point.y-lastPoint.y))
                 {
                     ctrlPoint = new Vector2(point.x, lastPoint.y);
                     currConnectionPoints[currConnectionPoints.Count-1] = ctrlPoint;  
-                    guideLine.SetPositions(new Vector3[] {ctrlPoint + Vector2.down * 5f, ctrlPoint + Vector2.up * 5f});
+                    start = new Vector3(ctrlPoint.x, screenBottomRight.y);
+                    end = new Vector3(ctrlPoint.x, screenTopLeft.y);
                 }
                 else
                 {
                     ctrlPoint = new Vector2(lastPoint.x, point.y);
                     currConnectionPoints[currConnectionPoints.Count-1] = ctrlPoint;  
-                    guideLine.SetPositions(new Vector3[] {ctrlPoint + Vector2.left * 5f, ctrlPoint + Vector2.right * 5f}); 
+                    start = new Vector3(screenBottomRight.x, ctrlPoint.y);
+                    end = new Vector3(screenTopLeft.x, ctrlPoint.y);
                 }
+                guideLine.SetPositions(new Vector3[] {start, end});
+                RaycastHit2D hit = Physics2D.Raycast(start, end - start, Mathf.Infinity, inputNodeLayer);
+                SetGuideLineColor(hit);
             }
             else guideLine.enabled = false;
 
@@ -268,7 +289,8 @@ public class Simulator : MonoBehaviour
                     (ushort)circuitObjects.IndexOf(connectionLine.outputNode.parent),
                     (ushort)connectionLine.outputIndex,
                     (ushort)circuitObjects.IndexOf(connectionLine.inputNode.parent),
-                    (ushort)connectionLine.inputIndex
+                    (ushort)connectionLine.inputIndex,
+                    connectionLine.GetConnectionPoints()
                 )
             );
         }
@@ -318,10 +340,24 @@ public class Simulator : MonoBehaviour
             Transform outputTransform = circuitObjects[connection.outputObj];
             connectionLine.SetTransforms(outputTransform.GetChild(outputTransform.childCount - connection.outPutIndex-1),
             circuitObjects[connection.inputObject].GetChild(connection.inputIndex));
+            connectionLine.LoadConnectionPoints(connection.pathPoints);
             connectionLines.Add(connectionLine);
         }
         mainCam.transform.position = new Vector3(circuitData.camX, circuitData.camY, -10f);
         mainCam.orthographicSize = circuitData.size;
+    }
+
+    void SetGuideLineColor(bool detected)
+    {
+        guideLine.startColor = guideLine.endColor = detected ? guideLineHitColor : guideLineColor;
+    }
+
+    void CheckScreenBounds()
+    {
+        screenTopLeft = mainCam.ScreenToWorldPoint(new Vector3(0f, 0f));
+        print(screenTopLeft);
+        screenBottomRight = mainCam.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height));
+        print(screenBottomRight);
     }
 
     public void Menu()

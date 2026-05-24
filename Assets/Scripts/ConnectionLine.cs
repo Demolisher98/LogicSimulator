@@ -55,7 +55,6 @@ public class ConnectionLine : MonoBehaviour
         }
         if(Simulator.dragging)
         {
-            print(points.Count);
             points[0] = outputNode.position;
             points[points.Count-1] = inputNode.position;
             DrawLine();
@@ -74,6 +73,7 @@ public class ConnectionLine : MonoBehaviour
 
     void DrawLine()
     {
+        line = GetComponent<LineRenderer>();
         line.positionCount = points.Count;
         line.SetPositions(points.ToArray());
         SetEdgeCollider(line);
@@ -100,6 +100,32 @@ public class ConnectionLine : MonoBehaviour
         {
             this.points.Add(points[i]);
         }
+        this.points[this.points.Count - 1] = (inputNode.position);
+        print(this.points.Count);
+        DrawLine();
+    }
+
+    public void LoadConnectionPoints(List<SerializableVector> pathPoints)
+    {
+        points = new List<Vector3>
+        {
+            outputNode.position
+        };
+        print(pathPoints.Count);
+        foreach(SerializableVector pathPoint in pathPoints)
+        {
+            points.Add(new Vector3(pathPoint.x, pathPoint.y));
+        }
         points.Add(inputNode.position);
+    }
+
+    public List<SerializableVector> GetConnectionPoints()
+    {
+        List<SerializableVector> points = new List<SerializableVector>();
+        for(int i = 1;i < this.points.Count-1;i++)
+        {
+            points.Add(new SerializableVector(this.points[i].x,this.points[i].y));
+        }
+        return points;
     }
 }
