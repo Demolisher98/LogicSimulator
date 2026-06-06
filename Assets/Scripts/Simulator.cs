@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using TMPro;
@@ -23,6 +24,7 @@ public class Simulator : MonoBehaviour
     Vector2 screenTopLeft, screenBottomRight;
     public static List<ConnectionLine> connectionLines;
     public static Simulator simulator;
+    List<string> inputNames, outputNames;
     [HideInInspector]public bool clockPulse = false;
     [SerializeField]Transform selectGraphic;
     [SerializeField] string version = "1.0";
@@ -35,6 +37,7 @@ public class Simulator : MonoBehaviour
     [SerializeField] LineRenderer guideLine;
     [SerializeField] Color guideLineColor, guideLineHitColor;
     [SerializeField] LayerMask inputNodeLayer;
+    Coroutine coroutine;
 
     void Start()
     {
@@ -208,7 +211,6 @@ public class Simulator : MonoBehaviour
             CheckScreenBounds();
         }
 
-        //EnableMenu
         if (Input.GetKeyDown(KeyCode.Tab))
         {
             toolsOpened = !toolsOpened;
@@ -216,20 +218,17 @@ public class Simulator : MonoBehaviour
             PlayerPrefs.SetInt("BarOpened",toolsOpened ? 1 : 0);
         }
 
-        //Delete Selected Object
         if (Input.GetKeyDown(KeyCode.Delete))
         {
             Destroy(selectedObject);
             selectGraphic.gameObject.SetActive(false);
         }
 
-        //Pause Menu
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             escapeMenu.SetActive(true);
         }
 
-        // Rotate an object
         if(Input.GetKeyDown(KeyCode.R))
         {
             selectedObject.transform.Rotate(new Vector3(0f,0f,90f));
@@ -300,18 +299,10 @@ public class Simulator : MonoBehaviour
             circuitData.renamedObjects.Add(circuitObjects.IndexOf(renamable.transform)+"^"+renamable.text.text);
         }
         LogicSwitch[] switches = FindObjectsOfType<LogicSwitch>();
-        foreach(LogicSwitch logicSwitch in switches)
-        {
-            if(logicSwitch.GetOutput(0))
-            {
-                circuitData.switchesOn.Add(circuitObjects.IndexOf(logicSwitch.transform));
-            }
-        }
         circuitData.camX = mainCam.transform.position.x;
         circuitData.camY = mainCam.transform.position.y;
         circuitData.size = mainCam.orthographicSize;
         SaveLoadSystem.Save(circuitData, currentFile);
-        print("saved");
     }
 
     void Load(string fileName)
@@ -326,10 +317,6 @@ public class Simulator : MonoBehaviour
             string[] stripped = name.Split('^');
             int index = int.Parse(stripped[0]);
             circuitObjects[index].GetComponent<Renamable>().text.text = stripped[1];
-        }
-        foreach(int onIndex in circuitData.switchesOn)
-        {
-            circuitObjects[onIndex].GetComponent<LogicSwitch>().SetState(true);
         }
         foreach(Connection connection in circuitData.connections)
         {
@@ -355,9 +342,7 @@ public class Simulator : MonoBehaviour
     void CheckScreenBounds()
     {
         screenTopLeft = mainCam.ScreenToWorldPoint(new Vector3(0f, 0f));
-        print(screenTopLeft);
         screenBottomRight = mainCam.ScreenToWorldPoint(new Vector3(Screen.width, Screen.height));
-        print(screenBottomRight);
     }
 
     public void Menu()
@@ -378,10 +363,21 @@ public class Simulator : MonoBehaviour
 
     public void SpawnItem(int index)
     {
-        Vector2 randomPos = new Vector2(mainCam.transform.position.x, mainCam.transform.position.y) + Random.insideUnitCircle * 3f;
+        Vector2 randomPos = new Vector2(mainCam.transform.position.x, mainCam.transform.position.y) + UnityEngine.Random.insideUnitCircle * 3f;
         GameObject spawned = Instantiate(prefabs[index], randomPos, Quaternion.identity);
         circuitObjects.Add(spawned.transform);
         ids.Add((ushort)index);
+    }
+
+    public void SpawnCustomComponent(string blockName)
+    {
+        Vector2 randomPos = new Vector2(mainCam.transform.position.x, mainCam.transform.position.y) + UnityEngine.Random.insideUnitCircle * 3f;
+        GameObject spawned = Instantiate(prefabs[21], randomPos, Quaternion.identity);
+        CustomComponent customComponent = spawned.GetComponent<CustomComponent>();
+        BlockData loadedBlock = SaveLoadSystem.LoadBlock(blockName);
+        customComponent.BuildBlock(loadedBlock);
+        circuitObjects.Add(spawned.transform);
+        ids.Add(21);
     }
 
     public void RemoveTransform(Transform obj)
@@ -398,9 +394,96 @@ public class Simulator : MonoBehaviour
         ids.Add((ushort)index);
     }
 
+    public void SpawnCustomComponent(string name, float x,float y)
+    {
+        GameObject spawned = Instantiate(prefabs[21], new Vector3(x, y, 0f), Quaternion.identity);
+        circuitObjects.Add(spawned.transform);
+        ids.Add(21);
+    }
+
+    public void SynthesizeBlock()
+    {
+        LogicSwitch[] switches = FindObjectsOfType<LogicSwitch>();
+        OutPutBulb[] outPutBulbs = FindObjectsOfType<OutPutBulb>();
+        Array.Sort(outPutBulbs, (a,b) => b.transform.position.y.CompareTo(a.transform.position.y));
+        Array.Sort(switches, (a, b) => b.transform.position.y.CompareTo(a.transform.position.y));
+        coroutine = StartCoroutine(FindMinTerms(switches.Length,switches,outPutBulbs));
+    }
+
+    IEnumerator FindMinTerms(int bits, LogicSwitch[] switches, OutPutBulb[] outPutBulbs)
+    {
+        int term = 0;
+        
+        int final = (1 << bits) - 1; 
+        
+        List<List<int>> minTerms = new List<List<int>>();
+        for (int i = 0; i < outPutBulbs.Length; i++) 
+        {
+            minTerms.Add(new List<int>());
+        }
+
+        while (term <= final)
+        {
+            for (int i = 0; i < switches.Length; i++)
+            {
+                bool bitState = ((term >> i) & 1) == 1;
+                switches[i].SetState(bitState);
+            }
+
+            yield return null;
+            yield return null;
+
+            for (int i = 0; i < outPutBulbs.Length; i++)
+            {
+                if (outPutBulbs[i].GetState())
+                {
+                    minTerms[i].Add(term);
+                }
+            }
+            term++;
+        }
+
+        BlockData blockData = new BlockData();
+        string fileName = PlayerPrefs.GetString("CurrentFile");
+        print(fileName);
+        string blockName = fileName.Split(new char[] {'\\','.','/'})[1];
+        blockData.origin = fileName;
+        foreach(LogicSwitch logicSwitch in switches)
+        {
+            blockData.inputs.Add(logicSwitch.GetComponent<Renamable>().text.text);
+        }
+        foreach(OutPutBulb outPutBulb in outPutBulbs)
+        {
+            blockData.outputs.Add(outPutBulb.GetComponent<Renamable>().text.text);
+        }
+        foreach(List<int> minTerm in minTerms)
+        {
+            blockData.minTerms.Add(minTerm);
+        }
+        SaveLoadSystem.SaveBlockData(blockData,"Blocks/"+blockName+".block");
+        StopCoroutine(coroutine);
+        coroutine = null;
+    }
+
+    public static bool[] IntToBinaryLSB(int number, int bitCount)
+    {
+        // Handle invalid bit count inputs gracefully
+        if (bitCount <= 0) return new bool[0];
+
+        bool[] bits = new bool[bitCount];
+
+        for (int i = 0; i < bitCount; i++)
+        {
+            if (i < 32) bits[i] = ((number >> i) & 1) == 1;
+            else bits[i] = number < 0;
+        }
+
+        return bits;
+    }
+
     IEnumerator ClockToggle()
     {
-        while(true && clockFrequency >= 1f)
+        while(true)
         {
             clockPulse = !clockPulse;
 

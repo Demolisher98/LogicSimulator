@@ -21,7 +21,6 @@ public class ConnectionLine : MonoBehaviour
         line.startWidth = line.endWidth = linewidth;
         line.startColor = line.endColor = Color.black;
         edgeCollider2D = GetComponent<EdgeCollider2D>();
-        print(line);
     }
 
     public void SetUp(IOutputComponent outputComponent, int oIndex, IInputComponent inputComponent, int iIndex)
@@ -100,8 +99,7 @@ public class ConnectionLine : MonoBehaviour
         {
             this.points.Add(points[i]);
         }
-        this.points[this.points.Count - 1] = (inputNode.position);
-        print(this.points.Count);
+        this.points[this.points.Count - 1] = inputNode.position;
         DrawLine();
     }
 
@@ -111,7 +109,6 @@ public class ConnectionLine : MonoBehaviour
         {
             outputNode.position
         };
-        print(pathPoints.Count);
         foreach(SerializableVector pathPoint in pathPoints)
         {
             points.Add(new Vector3(pathPoint.x, pathPoint.y));

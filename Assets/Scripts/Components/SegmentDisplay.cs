@@ -9,10 +9,6 @@ public class SegmentDisplay : MonoBehaviour, IInputComponent
     public void SetInput(int index, bool state)
     {
         inputs[index] = state;
-    }
-
-    void Update()
-    {
         Evaluate();
     }
 

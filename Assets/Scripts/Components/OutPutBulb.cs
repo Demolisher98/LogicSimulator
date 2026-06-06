@@ -8,4 +8,9 @@ public class OutPutBulb : MonoBehaviour, IInputComponent
     {
         sprite.color = state ? Color.red : Color.black;
     }
+
+    public bool GetState()
+    {
+        return sprite.color == Color.red;
+    }
 }

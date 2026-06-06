@@ -23,4 +23,25 @@ public class SaveLoadSystem
         }
         return null;
     }
+
+    public static void SaveBlockData(BlockData blockData,string fileName)
+    {
+        FileStream fileStream = File.Open(fileName, FileMode.Create);
+        BinaryFormatter formatter = new BinaryFormatter();
+        formatter.Serialize(fileStream, blockData);
+        fileStream.Close();
+    }
+
+    public static BlockData LoadBlock(string fileName)
+    {
+        if(File.Exists(fileName))
+        {
+            FileStream fileStream = File.Open(fileName, FileMode.Open);
+            BinaryFormatter formatter = new BinaryFormatter();
+            BlockData retrieved = formatter.Deserialize(fileStream) as BlockData;
+            fileStream.Close();
+            return retrieved;
+        }
+        return null;
+    }
 }
